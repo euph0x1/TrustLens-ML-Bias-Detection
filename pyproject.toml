@@ -1,0 +1,9 @@
+[project]
+name = "trustlens"
+version = "0.1.0"
+description = "GenAI fairness and trust audit toolkit"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
