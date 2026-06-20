@@ -103,15 +103,22 @@ trust = 100 × combined  (capped when all claims contradict context, etc.)
 
 ## ML models used 
 unitary/toxic-bert	: Detects toxic language
-cross-encoder/nli-deberta-v3-small : Fact-checks claims (entailment/contradiction)
+
+cross-encoder/nli-deberta-v3-small : Fact-checks claims (entailment contradiction)
+
 all-MiniLM-L6-v2	: Semantic similarity
+
 en_core_web_sm	: Named Entity Recognition (spaCy)
 
 ## Handcoded Logic:
 
 Bias Detector: Regex stereotype patterns + descriptor classification
-Hallucination Checker: Rule-based domain logic (medical/hiring) + NLI verification
+
+Hallucination Checker: Rule-based domain logic (medical/hiring) + NLI 
+verification
+
 Fairness Evaluator: Counterfactual generation + SPD/DIR metrics
+
 Trust Scorer: Blended formula with severity caps
 
 ## Project structure
