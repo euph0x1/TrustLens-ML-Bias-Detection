@@ -1,12 +1,12 @@
-# TrustLens: GenAI Fairness & Trust Audit Platform
+# TrustLens: Tabular Fairness Auditing Platform
 
-Problem to solve: “Can I trust this AI-generated response before it reaches a user?”
+Problem to solve: “Can this predictive model make fair decisions across demographic groups?”
 
-TrustLens analyzes AI-generated responses for **demographic bias**, **hallucinations**, and **fairness risks**—producing explainable trust scores and audit reports through a Streamlit interface.
+TrustLens provides a Streamlit-driven workflow for tabular dataset profiling, bias measurement, fairness mitigation, explainability, and audit reporting.
 
 ## Problem
 
-Generative AI systems used in hiring, education, healthcare, and decision-making can produce biased, misleading, or unfair outputs. TrustLens provides transparent, systematic evaluation before content reaches end users.
+Classification models trained on real-world tabular data can learn unfair patterns that disadvantage protected groups. TrustLens helps detect disparities, compare mitigation strategies, and produce explainable audit outputs.
 
 ## Architecture
 
@@ -20,9 +20,8 @@ flowchart TB
 
     subgraph pipeline [TrustLensPipeline]
         BiasMod[BiasDetector]
-        HalluMod[HallucinationChecker]
         FairMod[CounterfactualEvaluator]
-        Scorer[TrustScorer]
+        Score[Fairness Scorecard]
     end
 
     subgraph output [StreamlitReport]
@@ -32,13 +31,10 @@ flowchart TB
 
     Prompt --> BiasMod
     Response --> BiasMod
-    Response --> HalluMod
-    Context --> HalluMod
-    BiasMod --> Scorer
-    HalluMod --> Scorer
-    FairMod --> Scorer
-    Scorer --> Dashboard
-    Scorer --> Report
+    BiasMod --> Score
+    FairMod --> Score
+    Score --> Dashboard
+    Score --> Report
 ```
 
 ## Quick start
@@ -51,75 +47,43 @@ python -m venv .venv
 
 # 2. Install dependencies
 pip install -r requirements.txt
-python -m spacy download en_core_web_sm
 
-# 3. Run tests (uses heuristic mode — no model download)
+# 3. Run tests
 pytest
 
 # 4. Launch the app
 streamlit run app/streamlit_app.py
 ```
 
-On first audit with ML models enabled, Hugging Face models will download (~1–2 GB). Heuristic fallbacks activate automatically if models are unavailable.
-
 ## Usage
 
-### Single response audit
+1. Launch the dashboard with `streamlit run app/streamlit_app.py`.
+2. Use the sidebar to select a dataset and protected attribute.
+3. Train baseline models from the **Model Training** tab.
+4. Review fairness metrics in the **Fairness Scorecard** tab.
+5. Compare performance versus fairness in **Tradeoff Analysis**.
+6. Apply mitigation methods in **Bias Mitigation**.
+7. Inspect feature impact with SHAP in **SHAP Explanations**.
+8. Generate an audit PDF from the **Audit Reports** tab.
 
-1. Open the **Audit** tab
-2. Paste the **prompt**, **AI response**, and optional **source context**
-3. Click **Run TrustLens Audit**
-4. Review trust score, highlighted spans, and download the report
+## Fairness audit workflow
 
-### Counterfactual fairness lab
+TrustLens is designed for tabular fairness auditing through these steps:
 
-1. Open the **Counterfactual Lab** tab
-2. Select a scenario (hiring, education, healthcare, etc.)
-3. Paste AI responses for both prompt variants
-4. Review SPD, DIR, and group disparity charts
+1. Load a dataset and choose a protected attribute.
+2. Train baseline models and evaluate standard classification performance.
+3. Compute fairness metrics such as statistical parity difference (SPD), disparate impact ratio (DIR), equal opportunity difference (EOD), and equalized odds.
+4. Compare model performance against fairness outcomes.
+5. Apply mitigation methods and observe how fairness metrics change.
+6. Use SHAP explainability to inspect influential features.
+7. Generate a PDF audit report summarizing the findings.
 
-## Trust score
-
-Hybrid formula with domain-aware weights and severity caps:
-
-```
-combined = blend × additive + (1 − blend) × multiplicative
-trust = 100 × combined  (capped when all claims contradict context, etc.)
-```
-
-| Domain | Bias | Factuality | Fairness |
-|--------|------|------------|----------|
-| General | 35% | 40% | 25% |
-| Medical | 20% | 65% | 15% |
-| Hiring | 30% | 30% | 40% |
-
-**Severity caps:** fully contradicted claims cap trust at 20; zero factuality with context caps at 25.
-
-| Sub-score | Meaning |
-|-----------|---------|
-| Bias | Toxicity, stereotypes, negative demographic descriptors |
-| Factuality | Claim grounding against provided context (NLI + similarity) |
-| Fairness | Counterfactual disparity across protected groups |
-
-## ML models used 
-unitary/toxic-bert	: Detects toxic language
-
-cross-encoder/nli-deberta-v3-small : Fact-checks claims (entailment contradiction)
-
-all-MiniLM-L6-v2	: Semantic similarity
-
-en_core_web_sm	: Named Entity Recognition (spaCy)
-
-## Handcoded Logic:
-
-Bias Detector: Regex stereotype patterns + descriptor classification
-
-Hallucination Checker: Rule-based domain logic (medical/hiring) + NLI 
-verification
-
-Fairness Evaluator: Counterfactual generation + SPD/DIR metrics
-
-Trust Scorer: Blended formula with severity caps
+## Libraries used
+- `xgboost`: tabular model training and evaluation.
+- `fairlearn`: fairness-aware mitigation and post-processing.
+- `shap`: model explainability and feature attribution.
+- `plotly`: interactive dashboard visualizations.
+- `reportlab`: PDF report generation.
 
 ## Project structure
 
@@ -128,9 +92,10 @@ src/trustlens/          Core pipeline modules
 app/streamlit_app.py    Streamlit UI
 data/benchmarks/        Counterfactual prompt scenarios
 data/sample/            Example audit cases
-notebooks/              Learning notebooks
+reports/                 Generated PDF reports and chart assets
 tests/                  Unit tests
-config/default.yaml     Model names, weights, thresholds
+requirements.txt        Python dependencies
+pyproject.toml          Project metadata and pytest config
 ```
 
 ## Metrics reference
