@@ -1,99 +1,111 @@
 from __future__ import annotations
 
-import csv
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Any
-
-from trustlens.config import ROOT
-from trustlens.fairness.metrics import fairness_disparity, positive_framing_score
-
-DEFAULT_BENCHMARK_PATH = ROOT / "data" / "benchmarks" / "counterfactual_prompts.csv"
-
-
-@dataclass
-class CounterfactualScenario:
-    scenario_id: str
-    domain: str
-    protected_attribute: str
-    group_a: str
-    group_b: str
-    prompt_a: str
-    prompt_b: str
-    description: str
-
-
-@dataclass
-class CounterfactualResult:
-    scenario_id: str
-    group_scores: dict[str, float]
-    group_bias_scores: dict[str, float]
-    disparity: dict[str, float]
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "scenario_id": self.scenario_id,
-            "group_scores": {k: round(v, 4) for k, v in self.group_scores.items()},
-            "group_bias_scores": {k: round(v, 4) for k, v in self.group_bias_scores.items()},
-            "disparity": {k: round(v, 4) if isinstance(v, float) else v for k, v in self.disparity.items()},
-        }
-
-
-def load_scenarios(path: Path | None = None) -> list[CounterfactualScenario]:
-    csv_path = path or DEFAULT_BENCHMARK_PATH
-    scenarios: list[CounterfactualScenario] = []
-    with csv_path.open(encoding="utf-8", newline="") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            scenarios.append(
-                CounterfactualScenario(
-                    scenario_id=row["scenario_id"],
-                    domain=row["domain"],
-                    protected_attribute=row["protected_attribute"],
-                    group_a=row["group_a"],
-                    group_b=row["group_b"],
-                    prompt_a=row["prompt_a"],
-                    prompt_b=row["prompt_b"],
-                    description=row["description"],
-                )
-            )
-    return scenarios
-
+import pandas as pd
+import numpy as np
 
 class CounterfactualEvaluator:
-    def evaluate_pair(
-        self,
-        scenario_id: str,
-        response_a: str,
-        response_b: str,
-        group_a: str,
-        group_b: str,
-        bias_scores: dict[str, float] | None = None,
-    ) -> CounterfactualResult:
-        rate_a = positive_framing_score(response_a)
-        rate_b = positive_framing_score(response_b)
-        group_scores = {group_a: rate_a, group_b: rate_b}
-        group_bias = bias_scores or {group_a: 0.0, group_b: 0.0}
-        disparity = fairness_disparity(group_scores, group_bias)
-        return CounterfactualResult(
-            scenario_id=scenario_id,
-            group_scores=group_scores,
-            group_bias_scores=group_bias,
-            disparity=disparity,
-        )
+    def __init__(self):
+        pass
 
-    def evaluate_multi(
+    def evaluate_candidate(
         self,
-        responses: dict[str, str],
-        bias_scores: dict[str, float] | None = None,
-        scenario_id: str = "custom",
-    ) -> CounterfactualResult:
-        group_scores = {g: positive_framing_score(r) for g, r in responses.items()}
-        group_bias = bias_scores or {g: 0.0 for g in responses}
-        disparity = fairness_disparity(group_scores, group_bias)
-        return CounterfactualResult(
-            scenario_id=scenario_id,
-            group_scores=group_scores,
-            group_bias_scores=group_bias,
-            disparity=disparity,
-        )
+        model,
+        loader,
+        df_raw: pd.DataFrame,
+        candidate_dict: dict,
+        protected_attribute: str,
+        feature_names: list[str]
+    ) -> list[dict]:
+        """
+        Evaluate a single candidate against their counterfactual counterparts.
+        Swaps the protected_attribute and records model output changes.
+        """
+        # Determine possible values for the protected attribute
+        priv_dict = loader.protected_attributes[protected_attribute]
+        priv_val = priv_dict["privileged"]
+        unpriv_val = priv_dict["unprivileged"]
+        
+        orig_val = candidate_dict.get(protected_attribute, "")
+        
+        # Find potential swap values
+        if protected_attribute.lower() in ("sex", "gender"):
+            swap_val = "Female" if orig_val == "Male" else "Male"
+            swap_values = [swap_val]
+        elif protected_attribute == "race":
+            swap_values = ["Black", "White", "Asian-Pac-Islander"]
+            swap_values = [v for v in swap_values if v != orig_val]
+        elif protected_attribute == "MaritalStatus":
+            swap_values = ["Single", "Married", "Divorced"]
+            swap_values = [v for v in swap_values if v != orig_val]
+        elif protected_attribute == "age_group":
+            swap_val = "Young" if orig_val == "Older" else "Older"
+            swap_values = [swap_val]
+        else:
+            swap_values = [unpriv_val if orig_val == priv_val else priv_val]
+            
+        # Create versions
+        variants = [{"label": "Original", "data": candidate_dict.copy()}]
+        for val in swap_values:
+            variant_dict = candidate_dict.copy()
+            variant_dict[protected_attribute] = val
+            
+            # If swapping age group, also update the numerical age to be realistic
+            if protected_attribute == "age_group":
+                age_col = next((c for c in candidate_dict if c.lower() == "age"), None)
+                if age_col:
+                    if val == "Young":
+                        variant_dict[age_col] = 28
+                    else:
+                        variant_dict[age_col] = 50
+                        
+            variants.append({
+                "label": f"Counterfactual ({val})",
+                "data": variant_dict
+            })
+            
+        # Preprocess all variants deterministically using df_raw statistics
+        results = []
+        for var in variants:
+            cand_row = var["data"]
+            cand_processed = {}
+            
+            # 1. Scale numericals
+            for col in loader.numerical_features:
+                if col in cand_row:
+                    train_col = df_raw[col]
+                    mean = train_col.mean()
+                    std = train_col.std() + 1e-9
+                    cand_processed[col] = (float(cand_row[col]) - mean) / std
+                else:
+                    cand_processed[col] = 0.0
+                    
+            # 2. One-hot encode categoricals
+            for col in loader.categorical_features:
+                if col in cand_row:
+                    cats = sorted(df_raw[col].dropna().unique())
+                    cand_val = cand_row[col]
+                    for cat in cats:
+                        dummy_name = f"{col}_{cat}"
+                        cand_processed[dummy_name] = 1.0 if cand_val == cat else 0.0
+                        
+            # Build 1-row DataFrame aligned with training feature names
+            cand_df = pd.DataFrame(index=[0])
+            for feat in feature_names:
+                cand_df[feat] = cand_processed.get(feat, 0.0)
+                
+            # Run model prediction
+            if hasattr(model, "predict_proba"):
+                prob = float(model.predict_proba(cand_df)[0, 1])
+            else:
+                prob = float(model.predict(cand_df)[0])
+                
+            pred = int(prob >= 0.5)
+            
+            results.append({
+                "label": var["label"],
+                "data": cand_row,
+                "prediction": pred,
+                "probability": prob
+            })
+            
+        return results
