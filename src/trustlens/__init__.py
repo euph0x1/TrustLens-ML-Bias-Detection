@@ -1,7 +1,7 @@
-"""TrustLens: GenAI fairness and trust audit toolkit."""
+"""TrustLens: Explainable Fairness Auditing Framework for AI Decision Systems."""
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
-from trustlens.pipeline import TrustLensPipeline, AuditResult
+from trustlens.pipeline import TrustLensPipeline
 
-__all__ = ["TrustLensPipeline", "AuditResult", "__version__"]
+__all__ = ["TrustLensPipeline", "__version__"]
