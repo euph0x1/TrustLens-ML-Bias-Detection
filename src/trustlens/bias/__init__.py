@@ -1,5 +1,5 @@
 from __future__ import annotations
 
-from trustlens.bias.detector import BiasDetector, BiasResult
+from trustlens.bias.detector import BiasDetector
 
-__all__ = ["BiasDetector", "BiasResult"]
+__all__ = ["BiasDetector"]
