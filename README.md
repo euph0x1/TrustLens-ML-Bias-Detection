@@ -117,8 +117,11 @@ pyproject.toml          Project metadata and pytest config
 ## What I would build next
 
 - RAG-based retrieval for open-domain fact verification
+
 - Optional OpenAI API integration for auto-generating counterfactual responses
+
 - Classical tabular ML fairness track (Adult Census + fairlearn)
+
 - Production monitoring dashboard with audit history
 
 ## License
