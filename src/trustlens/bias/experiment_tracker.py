@@ -127,6 +127,7 @@ class ExperimentTracker:
         df_sorted = df.sort_values(by="overall_fairness", ascending=False)
         return df_sorted.iloc[0].to_dict()
 
+
     def clear_history(self) -> None:
         """Clear historical runs."""
         if self.history_path.exists():
@@ -134,3 +135,4 @@ class ExperimentTracker:
                 self.history_path.unlink()
             except Exception:
                 pass
+
